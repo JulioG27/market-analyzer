@@ -1,0 +1,30 @@
+name: Daily Telegram Market Alert
+
+on:
+  schedule:
+    # הרצה בימי שני עד שישי ב-05:30 UTC (מקביל ל-08:30 שעון ישראל בקיץ / 07:30 בחורף)
+    - cron: '30 5 * * 1-5'
+  workflow_dispatch: # מאפשר הרצה ידנית מתוך GitHub בלחיצת כפתור
+
+jobs:
+  send-alert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Alert Script
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python send_telegram_alert.py
