@@ -2,6 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import plotly.graph_objects as go
 
 # הגדרות עמוד
 st.set_page_config(
@@ -14,13 +15,11 @@ st.set_page_config(
 # עיצוב CSS ממוקד: RTL לכותרות וטקסטים בלבד (ללא שיבוש טבלאות)
 st.markdown("""
 <style>
-    /* כיווניות עברית לטקסטים וכותרות בלבד */
     h1, h2, h3, h4, h5, h6, .stMarkdown, .stCaption {
         direction: rtl;
         text-align: right;
     }
     
-    /* כרטיסיית ציון והמלצה מרכזית */
     .score-card {
         background: linear-gradient(135deg, #1E1B4B 0%, #0F172A 100%);
         border: 2px solid #6366F1;
@@ -47,7 +46,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# רשימת המדדים, הסחורות והמאקרו
 MARKETS = {
     'S&P 500 Futures': 'ES=F',
     'Nasdaq 100 Futures': 'NQ=F',
@@ -66,6 +64,40 @@ MACRO_INDICATORS = {
     'VIX (מדד הפחד)': '^VIX',
     'דולר / שקל': 'USDILS=X'
 }
+
+def render_zoomed_chart(series, height=110):
+    """ייצור גרף Plotly עם זום אוטומטי לציר ה-Y לפי טווח המחירים האמיתי"""
+    if series.empty:
+        return None
+    
+    y_min = series.min() * 0.995
+    y_max = series.max() * 1.005
+    
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=series.index, 
+        y=series.values, 
+        mode='lines',
+        line=dict(color='#6366F1', width=2),
+        hovertemplate='מחיר: %{y:,.2f}<extra></extra>'
+    ))
+    
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=5, b=5),
+        height=height,
+        xaxis=dict(visible=False),
+        yaxis=dict(
+            visible=True, 
+            range=[y_min, y_max],
+            tickfont=dict(size=10, color='#9CA3AF'),
+            gridcolor='#1F2937',
+            zeroline=False
+        ),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        showlegend=False
+    )
+    return fig
 
 def calculate_technical_indicators(df):
     if len(df) < 150:
@@ -122,18 +154,16 @@ def fetch_all_data():
                 'SMA_150': round(df['SMA_150'].iloc[-1], 2) if 'SMA_150' in df else None,
                 'ATR_PCT': round(df['ATR_PCT'].iloc[-1], 2) if 'ATR_PCT' in df else None,
                 'MACD_Hist': round(df['MACD_Hist'].iloc[-1], 2) if 'MACD_Hist' in df else None,
-                'History': df['Close'].tail(60)  # מחירים מקוריים ואמיתיים
+                'History': df['Close'].tail(60)
             }
         except Exception as e:
             print(f"Error fetching {name}: {e}")
     return data
 
 def compute_confluence_score(data):
-    """מנוע חישוב ציון התלכדות 0-100 והפקת המלצה אופרטיבית"""
     score = 50
     reasons = []
     
-    # 1. חוזים בארה"ב (35%)
     sp_change = data.get('S&P 500 Futures', {}).get('% Change', 0)
     nq_change = data.get('Nasdaq 100 Futures', {}).get('% Change', 0)
     us_avg = (sp_change + nq_change) / 2
@@ -145,7 +175,6 @@ def compute_confluence_score(data):
         score -= 20
         reasons.append("🔴 חוזים עתידיים בארה\"ב בירידות חדות.")
         
-    # 2. אסיה (25%)
     nikkei = data.get('Nikkei 225', {}).get('% Change', 0)
     hangseng = data.get('Hang Seng', {}).get('% Change', 0)
     asia_avg = (nikkei + hangseng) / 2
@@ -157,7 +186,6 @@ def compute_confluence_score(data):
         score -= 15
         reasons.append("🔴 סגירה שלילית בשווקי אסיה.")
 
-    # 3. VIX - מדד הפחד (20%)
     vix = data.get('VIX (מדד הפחד)', {}).get('Price', 15)
     if vix < 16:
         score += 10
@@ -166,7 +194,6 @@ def compute_confluence_score(data):
         score -= 15
         reasons.append("⚠️ מדד VIX גבוה (תנודתיות ורמת סיכון גבוהה בשוק).")
 
-    # 4. מומנטום ומבוצעים (20%)
     sp_data = data.get('S&P 500 Futures', {})
     if sp_data.get('Price', 0) > sp_data.get('EMA_20', 1):
         score += 5
@@ -189,7 +216,6 @@ def compute_confluence_score(data):
         
     return final_score, action_text, action_class, reasons
 
-# --- הרצת ממשק Streamlit ---
 if __name__ == "__main__":
     st.title("⚡ Global Market Confluence Pro")
     st.markdown("מערכת ניתוח עוקבת לקבלת החלטות מסחר לפני פתיחת הבוקר")
@@ -199,7 +225,6 @@ if __name__ == "__main__":
     if data:
         score, action_text, action_class, reasons = compute_confluence_score(data)
         
-        # כרטיסיית ציון והמלצה אופרטיבית
         st.markdown(f"""
         <div class="score-card">
             <h3 style="margin:0; color:#A5B4FC;">ציון התלכדות שוק (Confluence Score)</h3>
@@ -228,7 +253,9 @@ if __name__ == "__main__":
                     with cols[idx]:
                         st.metric(label=name, value=f"{m['Price']}", delta=f"{m['% Change']}%")
                         st.caption(f"RSI: {m['RSI']} | ATR: {m['ATR_PCT']}%")
-                        st.line_chart(m['History'], height=90)
+                        fig = render_zoomed_chart(m['History'], height=100)
+                        if fig:
+                            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
             
             st.subheader("💡 גורמים משפיעים על הציון")
             for r in reasons:
@@ -243,7 +270,9 @@ if __name__ == "__main__":
                     with c_cols[idx]:
                         st.metric(label=name, value=f"{m['Price']}", delta=f"{m['% Change']}%")
                         st.caption(f"RSI: {m['RSI']} | ATR: {m['ATR_PCT']}%")
-                        st.line_chart(m['History'], height=110)
+                        fig = render_zoomed_chart(m['History'], height=120)
+                        if fig:
+                            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
         with tab3:
             st.subheader("תיאום מגמה ואינדיקטורים טכניים")
@@ -258,22 +287,21 @@ if __name__ == "__main__":
                     sma150 = m['SMA_150']
                     
                     if price and ema20 and ema50 and sma150:
-                        trend = "שורי" if price > ema20 > ema50 > sma150 else ("דובי" if price < ema20 else "דשדוש")
+                        trend = "🟢 שורי" if price > ema20 > ema50 > sma150 else ("🔴 דובי" if price < ema20 else "🟡 דשדוש")
                     else:
-                        trend = "ללא נתונים"
+                        trend = "⚪ ללא נתונים"
                         
                     tech_list.append({
                         'Asset': name,
                         'Price': price,
-                        'Change %': m['% Change'],
+                        'Change %': f"{m['% Change']}%",
                         'RSI (14)': m['RSI'],
-                        'ATR %': m['ATR_PCT'],
+                        'ATR %': f"{m['ATR_PCT']}%",
                         'Trend': trend
                     })
             
             df_tech = pd.DataFrame(tech_list)
             
-            # הצגת טבלה נקייה ומעוצבת ללא שיבושי BIDI/CSS
             st.dataframe(
                 df_tech, 
                 use_container_width=True, 
@@ -281,10 +309,10 @@ if __name__ == "__main__":
                 column_config={
                     "Asset": st.column_config.TextColumn("נכס", width="medium"),
                     "Price": st.column_config.NumberColumn("מחיר ($)", format="%.2f"),
-                    "Change %": st.column_config.NumberColumn("שינוי יומי (%)", format="%.2f%%"),
+                    "Change %": st.column_config.TextColumn("שינוי יומי"),
                     "RSI (14)": st.column_config.NumberColumn("RSI (14)", format="%.1f"),
-                    "ATR %": st.column_config.NumberColumn("ATR (%)", format="%.2f%%"),
-                    "Trend": st.column_config.TextColumn("מבנה מגמה", width="small")
+                    "ATR %": st.column_config.TextColumn("ATR (%)"),
+                    "Trend": st.column_config.TextColumn("מבנה מגמה", width="medium")
                 }
             )
 
@@ -296,4 +324,6 @@ if __name__ == "__main__":
                     m = data[name]
                     with m_cols[idx]:
                         st.metric(label=name, value=f"{m['Price']}", delta=f"{m['% Change']}%")
-                        st.line_chart(m['History'], height=120)
+                        fig = render_zoomed_chart(m['History'], height=130)
+                        if fig:
+                            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
