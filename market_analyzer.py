@@ -11,29 +11,13 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# עיצוב CSS מותאם אישית: כיווניות מימין לשמאל (RTL) ותצוגת Dark Neon
+# עיצוב CSS ממוקד: RTL לכותרות וטקסטים בלבד (ללא שיבוש טבלאות)
 st.markdown("""
 <style>
-    /* הגדרת כיווניות RTL לכל האפליקציה */
-    .stApp, div[data-testid="stMarkdownContainer"], p, h1, h2, h3, h4, h5, h6, label, div {
-        direction: rtl !important;
-        text-align: right !important;
-    }
-    
-    /* תיקון כיווניות לטאבים ולוחות מחוונים */
-    div[data-testid="stHorizontalBlock"] {
-        direction: rtl !important;
-    }
-    
-    .stTabs [data-baseweb="tab-list"] {
-        direction: rtl !important;
-        gap: 10px;
-    }
-    
-    /* שמירה על מספרים, סימולים ואחוזים משמאל לימין */
-    code, .metric-value, [data-testid="stMetricValue"] {
-        direction: ltr !important;
-        display: inline-block;
+    /* כיווניות עברית לטקסטים וכותרות בלבד */
+    h1, h2, h3, h4, h5, h6, .stMarkdown, .stCaption {
+        direction: rtl;
+        text-align: right;
     }
     
     /* כרטיסיית ציון והמלצה מרכזית */
@@ -45,6 +29,7 @@ st.markdown("""
         text-align: center !important;
         box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.3);
         margin-bottom: 25px;
+        direction: rtl;
     }
     
     .action-badge {
@@ -54,7 +39,6 @@ st.markdown("""
         font-size: 1.5rem;
         font-weight: 800;
         margin-top: 15px;
-        letter-spacing: 0.5px;
     }
     
     .action-buy { background-color: rgba(16, 185, 129, 0.2); color: #10B981; border: 2px solid #10B981; }
@@ -129,10 +113,6 @@ def fetch_all_data():
             prev_close = df['Close'].iloc[-2]
             pct_change = ((last_close - prev_close) / prev_close) * 100
             
-            # חישוב תשואה באחוזים מנורמלת ל-60 הימים האחרונים (עבור הטרנד הוויזואלי)
-            history_60 = df['Close'].tail(60)
-            norm_history = ((history_60 / history_60.iloc[0]) - 1) * 100
-            
             data[name] = {
                 'Price': round(last_close, 2),
                 '% Change': round(pct_change, 2),
@@ -142,7 +122,7 @@ def fetch_all_data():
                 'SMA_150': round(df['SMA_150'].iloc[-1], 2) if 'SMA_150' in df else None,
                 'ATR_PCT': round(df['ATR_PCT'].iloc[-1], 2) if 'ATR_PCT' in df else None,
                 'MACD_Hist': round(df['MACD_Hist'].iloc[-1], 2) if 'MACD_Hist' in df else None,
-                'History': norm_history
+                'History': df['Close'].tail(60)  # מחירים מקוריים ואמיתיים
             }
         except Exception as e:
             print(f"Error fetching {name}: {e}")
@@ -197,7 +177,6 @@ def compute_confluence_score(data):
 
     final_score = max(0, min(100, score))
     
-    # הגדרת המלצה אופרטיבית
     if final_score >= 65:
         action_text = "🟢 להיכנס לשוק (איתות חיובי חזק)"
         action_class = "action-buy"
@@ -270,7 +249,7 @@ if __name__ == "__main__":
             st.subheader("תיאום מגמה ואינדיקטורים טכניים")
             tech_list = []
             all_assets = {**MARKETS, **COMMODITIES_CRYPTO}
-            for name in all_assets.keys():
+            for name, ticker in all_assets.items():
                 if name in data:
                     m = data[name]
                     price = m['Price']
@@ -279,31 +258,33 @@ if __name__ == "__main__":
                     sma150 = m['SMA_150']
                     
                     if price and ema20 and ema50 and sma150:
-                        trend = "🟢 שורי" if price > ema20 > ema50 > sma150 else ("🔴 דובי" if price < ema20 else "🟡 דשדוש")
+                        trend = "שורי" if price > ema20 > ema50 > sma150 else ("דובי" if price < ema20 else "דשדוש")
                     else:
                         trend = "ללא נתונים"
                         
                     tech_list.append({
-                        'נכס': name,
-                        'מחיר': price,
-                        'שינוי': f"{m['% Change']}%",
-                        'RSI': m['RSI'],
-                        'ATR %': f"{m['ATR_PCT']}%",
-                        'מגמה': trend
+                        'Asset': name,
+                        'Price': price,
+                        'Change %': m['% Change'],
+                        'RSI (14)': m['RSI'],
+                        'ATR %': m['ATR_PCT'],
+                        'Trend': trend
                     })
             
             df_tech = pd.DataFrame(tech_list)
+            
+            # הצגת טבלה נקייה ומעוצבת ללא שיבושי BIDI/CSS
             st.dataframe(
                 df_tech, 
                 use_container_width=True, 
                 hide_index=True,
                 column_config={
-                    "נכס": st.column_config.TextColumn("נכס", width="medium"),
-                    "מחיר": st.column_config.NumberColumn("מחיר", format="%.2f"),
-                    "שינוי": st.column_config.TextColumn("שינוי יומי"),
-                    "RSI": st.column_config.NumberColumn("RSI (14)"),
-                    "ATR %": st.column_config.TextColumn("ATR %"),
-                    "מגמה": st.column_config.TextColumn("מבנה מגמה")
+                    "Asset": st.column_config.TextColumn("נכס", width="medium"),
+                    "Price": st.column_config.NumberColumn("מחיר ($)", format="%.2f"),
+                    "Change %": st.column_config.NumberColumn("שינוי יומי (%)", format="%.2f%%"),
+                    "RSI (14)": st.column_config.NumberColumn("RSI (14)", format="%.1f"),
+                    "ATR %": st.column_config.NumberColumn("ATR (%)", format="%.2f%%"),
+                    "Trend": st.column_config.TextColumn("מבנה מגמה", width="small")
                 }
             )
 
