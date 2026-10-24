@@ -2,6 +2,9 @@ import os
 import requests
 from market_analyzer import fetch_all_data, compute_confluence_score
 
+# הדבק כאן את הקישור האישי של האפליקציה שלך ב-Streamlit Cloud
+STREAMLIT_APP_URL = "https://market-analyzer.streamlit.app"  # החלף במידת הצורך בכתובת המדויקת שלך
+
 def send_telegram_message(message):
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
@@ -14,7 +17,8 @@ def send_telegram_message(message):
     payload = {
         "chat_id": chat_id,
         "text": message,
-        "parse_mode": "Markdown"
+        "parse_mode": "Markdown",
+        "disable_web_page_preview": False  # מציג תצוגה מקדימה עדינה לקישור
     }
     
     response = requests.post(url, json=payload)
@@ -50,6 +54,10 @@ def main():
     if sp: msg += f"• S&P 500 Futures: `{sp.get('% Change')}%` (RSI: `{sp.get('RSI')}`)\n"
     if vix: msg += f"• VIX (פחד): `{vix.get('Price')}` (`{vix.get('% Change')}%`)\n"
     if usd: msg += f"• דולר/שקל: `{usd.get('Price')}`\n"
+    
+    # הוספת הקישור הדינמי בתחתית ההודעה
+    app_url = os.getenv("STREAMLIT_APP_URL", STREAMLIT_APP_URL)
+    msg += f"\n🌐 [לחץ כאן לצפייה בדשבורד המלא והחי]({app_url})"
     
     send_telegram_message(msg)
 
