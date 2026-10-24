@@ -3,7 +3,7 @@ import requests
 from market_analyzer import fetch_all_data, compute_confluence_score
 
 # הדבק כאן את הקישור האישי של האפליקציה שלך ב-Streamlit Cloud
-STREAMLIT_APP_URL = "https://market-analyzer-faefsahmujsbsqyreisjmi.streamlit.app/"  # החלף במידת הצורך בכתובת המדויקת שלך
+STREAMLIT_APP_URL = "https://market-analyzer-faefsahmujsbsqyreisjmi.streamlit.app"  # החלף במידת הצורך בכתובת המדויקת שלך
 
 def send_telegram_message(message):
     token = os.getenv("TELEGRAM_BOT_TOKEN")
