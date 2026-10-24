@@ -3,6 +3,67 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 
+# הגדרות עמוד
+st.set_page_config(
+    page_title="Global Market Confluence Pro",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# עיצוב CSS מותאם אישית: כיווניות מימין לשמאל (RTL) ותצוגת Dark Neon
+st.markdown("""
+<style>
+    /* הגדרת כיווניות RTL לכל האפליקציה */
+    .stApp, div[data-testid="stMarkdownContainer"], p, h1, h2, h3, h4, h5, h6, label, div {
+        direction: rtl !important;
+        text-align: right !important;
+    }
+    
+    /* תיקון כיווניות לטאבים ולוחות מחוונים */
+    div[data-testid="stHorizontalBlock"] {
+        direction: rtl !important;
+    }
+    
+    .stTabs [data-baseweb="tab-list"] {
+        direction: rtl !important;
+        gap: 10px;
+    }
+    
+    /* שמירה על מספרים, סימולים ואחוזים משמאל לימין */
+    code, .metric-value, [data-testid="stMetricValue"] {
+        direction: ltr !important;
+        display: inline-block;
+    }
+    
+    /* כרטיסיית ציון והמלצה מרכזית */
+    .score-card {
+        background: linear-gradient(135deg, #1E1B4B 0%, #0F172A 100%);
+        border: 2px solid #6366F1;
+        border-radius: 16px;
+        padding: 24px;
+        text-align: center !important;
+        box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.3);
+        margin-bottom: 25px;
+    }
+    
+    .action-badge {
+        display: inline-block;
+        padding: 10px 24px;
+        border-radius: 30px;
+        font-size: 1.6rem;
+        font-weight: 800;
+        margin-top: 15px;
+        letter-spacing: 0.5px;
+    }
+    
+    .action-buy { background-color: rgba(16, 185, 129, 0.2); color: #10B981; border: 2px solid #10B981; }
+    .action-wait { background-color: rgba(245, 158, 11, 0.2); color: #F59E0B; border: 2px solid #F59E0B; }
+    .action-avoid { background-color: rgba(239, 68, 68, 0.2); color: #EF4444; border: 2px solid #EF4444; }
+</style>
+""", unsafe_allow_html=True)
+
+# רשימת המדדים והסחורות
 MARKETS = {
     'S&P 500 Futures (US)': 'ES=F',
     'Nasdaq 100 Futures (US)': 'NQ=F',
@@ -11,13 +72,18 @@ MARKETS = {
     'TA-35 (Israel)': 'TA35.TA'
 }
 
+COMMODITIES_CRYPTO = {
+    'זהב (Gold)': 'GC=F',
+    'נפט (Crude Oil)': 'CL=F',
+    'ביטקוין (Bitcoin)': 'BTC-USD'
+}
+
 MACRO_INDICATORS = {
     'VIX (Fear Index)': '^VIX',
     'USD/ILS (Dollar/Shekel)': 'USDILS=X'
 }
 
 def calculate_technical_indicators(df):
-    """חישוב מורחב: EMA20, EMA50, SMA150, RSI, ATR, MACD"""
     if len(df) < 150:
         return df
     
@@ -49,7 +115,7 @@ def calculate_technical_indicators(df):
 @st.cache_data(ttl=900)
 def fetch_all_data():
     data = {}
-    all_tickers = {**MARKETS, **MACRO_INDICATORS}
+    all_tickers = {**MARKETS, **COMMODITIES_CRYPTO, **MACRO_INDICATORS}
     
     for name, ticker in all_tickers.items():
         try:
@@ -79,21 +145,23 @@ def fetch_all_data():
     return data
 
 def compute_confluence_score(data):
-    """מנוע חישוב ציון התלכדות 0-100"""
+    """מנוע חישוב ציון התלכדות 0-100 והפקת המלצה אופרטיבית"""
     score = 50
     reasons = []
     
+    # 1. חוזים בארה"ב (35%)
     sp_change = data.get('S&P 500 Futures (US)', {}).get('% Change', 0)
     nq_change = data.get('Nasdaq 100 Futures (US)', {}).get('% Change', 0)
     us_avg = (sp_change + nq_change) / 2
     
     if us_avg > 0.5:
         score += 20
-        reasons.append("🟢 חוזים בארה\"ב מציגים עליות נאות.")
+        reasons.append("🟢 חוזים עתידיים בארה\"ב מציגים עליות נאות.")
     elif us_avg < -0.5:
         score -= 20
-        reasons.append("🔴 חוזים בארה\"ב בירידות חדות.")
+        reasons.append("🔴 חוזים עתידיים בארה\"ב בירידות חדות.")
         
+    # 2. אסיה (25%)
     nikkei = data.get('Nikkei 225 (Asia)', {}).get('% Change', 0)
     hangseng = data.get('Hang Seng (Asia)', {}).get('% Change', 0)
     asia_avg = (nikkei + hangseng) / 2
@@ -103,72 +171,73 @@ def compute_confluence_score(data):
         reasons.append("🟢 סגירה חיובית בשווקי אסיה.")
     elif asia_avg < -0.3:
         score -= 15
-        reasons.append("🔴 סגירה שלילית באסיה.")
+        reasons.append("🔴 סגירה שלילית בשווקי אסיה.")
 
+    # 3. VIX - מדד הפחד (20%)
     vix = data.get('VIX (Fear Index)', {}).get('Price', 15)
     if vix < 16:
         score += 10
-        reasons.append("🟢 מדד VIX נמוך (רגיעה בשווקים).")
+        reasons.append("🟢 מדד VIX נמוך (סביבת מסחר רגועה).")
     elif vix > 22:
         score -= 15
-        reasons.append("⚠️ מדד VIX גבוה (תנודתיות ופחד בשוק).")
+        reasons.append("⚠️ מדד VIX גבוה (תנודתיות ורמת סיכון גבוהה בשוק).")
 
+    # 4. מומנטום ומבוצעים (20%)
     sp_data = data.get('S&P 500 Futures (US)', {})
     if sp_data.get('Price', 0) > sp_data.get('EMA_20', 1):
         score += 5
     if sp_data.get('Price', 0) > sp_data.get('SMA_150', 1):
         score += 5
     if sp_data.get('RSI', 50) > 70:
-        reasons.append("⚠️ S&P 500 בקניית יתר (RSI > 70).")
+        reasons.append("⚠️ S&P 500 בטריטוריית קניית-יתר (RSI > 70).")
+
+    final_score = max(0, min(100, score))
+    
+    # הגדרת המלצה אופרטיבית
+    if final_score >= 65:
+        action_text = "🟢 להיכנס לשוק (איתות חיובי חזק)"
+        action_class = "action-buy"
+    elif final_score >= 40:
+        action_text = "🟡 להמתין (סנטימנט מעורב / שוק לא החלטי)"
+        action_class = "action-wait"
+    else:
+        action_text = "🔴 לא להיכנס (סיכון גבוה / מומנטום שלילי)"
+        action_class = "action-avoid"
         
-    return max(0, min(100, score)), reasons
+    return final_score, action_text, action_class, reasons
 
-# --- הרצת ממשק Streamlit בלבד (לא מופעל בעת import לטלגרם) ---
+# --- הרצת ממשק Streamlit ---
 if __name__ == "__main__":
-    st.set_page_config(
-        page_title="Global Market Confluence Pro",
-        page_icon="⚡",
-        layout="wide",
-        initial_sidebar_state="collapsed"
-    )
-
-    st.markdown("""
-    <style>
-        .stApp { background-color: #0A0E17; color: #E2E8F0; }
-        .score-card {
-            background: linear-gradient(135deg, #1E1B4B 0%, #0F172A 100%);
-            border: 2px solid #6366F1;
-            border-radius: 16px;
-            padding: 20px;
-            text-align: center;
-            box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.3);
-            margin-bottom: 25px;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-
     st.title("⚡ Global Market Confluence Pro")
     st.markdown("מערכת ניתוח עוקבת לקבלת החלטות מסחר לפני פתיחת הבוקר")
 
     data = fetch_all_data()
 
     if data:
-        score, reasons = compute_confluence_score(data)
+        score, action_text, action_class, reasons = compute_confluence_score(data)
         
+        # כרטיסיית ציון והמלצה אופרטיבית
         st.markdown(f"""
         <div class="score-card">
             <h3 style="margin:0; color:#A5B4FC;">ציון התלכדות שוק (Confluence Score)</h3>
-            <h1 style="font-size: 3.5rem; margin:10px 0; color: {'#10B981' if score>=60 else ('#EF4444' if score<=40 else '#F59E0B')};">
+            <h1 style="font-size: 3.5rem; margin:10px 0; color: {'#10B981' if score>=65 else ('#EF4444' if score<40 else '#F59E0B')};">
                 {score} / 100
             </h1>
-            <h4>סטטוס: {'🟢 שורי (Bullish Bias)' if score>=60 else ('🔴 דובי (Bearish Bias)' if score<=40 else '🟡 ניטרלי / מעורב')}</h4>
+            <div>
+                <span class="action-badge {action_class}">{action_text}</span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
         
-        tab1, tab2, tab3 = st.tabs(["📊 תמונת מצב מהירה", "📈 ניתוח טכני מעמיק", "🌐 מדדי מאקרו ו-VIX"])
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "📊 מדדים מרכזיים", 
+            "🥇 סחורות וקריפטו", 
+            "📈 ניתוח טכני מעמיק", 
+            "🌐 מדדי מאקרו ו-VIX"
+        ])
         
         with tab1:
-            st.subheader("מצב המדדים המרכזיים")
+            st.subheader("מצב המדדים הבינלאומיים")
             cols = st.columns(len(MARKETS))
             for idx, (name, ticker_data) in enumerate(MARKETS.items()):
                 if name in data:
@@ -178,14 +247,26 @@ if __name__ == "__main__":
                         st.caption(f"RSI: {m['RSI']} | ATR: {m['ATR_PCT']}%")
                         st.line_chart(m['History'], height=80)
             
-            st.subheader("💡 ניתוח גורמים משפיעים")
+            st.subheader("💡 גורמים משפיעים על הציון")
             for r in reasons:
                 st.write(r)
 
         with tab2:
-            st.subheader("תיאום מגמה ואינדיקטורים מתקדמים")
+            st.subheader("נכסי מקלט, סחורות וקריפטו")
+            c_cols = st.columns(len(COMMODITIES_CRYPTO))
+            for idx, (name, ticker_data) in enumerate(COMMODITIES_CRYPTO.items()):
+                if name in data:
+                    m = data[name]
+                    with c_cols[idx]:
+                        st.metric(label=name, value=f"{m['Price']}", delta=f"{m['% Change']}%")
+                        st.caption(f"RSI: {m['RSI']} | ATR: {m['ATR_PCT']}%")
+                        st.line_chart(m['History'], height=100)
+
+        with tab3:
+            st.subheader("תיאום מגמה ואינדיקטורים טכניים")
             tech_list = []
-            for name in MARKETS.keys():
+            all_assets = {**MARKETS, **COMMODITIES_CRYPTO}
+            for name in all_assets.keys():
                 if name in data:
                     m = data[name]
                     price = m['Price']
@@ -199,17 +280,20 @@ if __name__ == "__main__":
                         trend = "ללא נתונים"
                         
                     tech_list.append({
-                        'מדד': name,
+                        'נכס': name,
                         'מחיר': price,
                         'שינוי %': f"{m['% Change']}%",
                         'RSI (14)': m['RSI'],
-                        'ATR % (תנודתיות)': f"{m['ATR_PCT']}%",
+                        'ATR %': f"{m['ATR_PCT']}%",
                         'MACD Hist': m['MACD_Hist'],
                         'מבנה מגמה': trend
                     })
             st.dataframe(pd.DataFrame(tech_list), use_container_width=True)
 
         with tab3:
+            pass # Tab 3 used above for tech analysis
+
+        with tab4:
             st.subheader("מדדי סיכון ומט\"ח")
             m_cols = st.columns(2)
             for idx, (name, ticker_data) in enumerate(MACRO_INDICATORS.items()):
