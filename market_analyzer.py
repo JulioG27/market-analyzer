@@ -51,7 +51,7 @@ st.markdown("""
         display: inline-block;
         padding: 10px 24px;
         border-radius: 30px;
-        font-size: 1.6rem;
+        font-size: 1.5rem;
         font-weight: 800;
         margin-top: 15px;
         letter-spacing: 0.5px;
@@ -63,13 +63,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# רשימת המדדים והסחורות
+# רשימת המדדים, הסחורות והמאקרו
 MARKETS = {
-    'S&P 500 Futures (US)': 'ES=F',
-    'Nasdaq 100 Futures (US)': 'NQ=F',
-    'Nikkei 225 (Asia)': '^N225',
-    'Hang Seng (Asia)': '^HSI',
-    'TA-35 (Israel)': 'TA35.TA'
+    'S&P 500 Futures': 'ES=F',
+    'Nasdaq 100 Futures': 'NQ=F',
+    'Nikkei 225': '^N225',
+    'Hang Seng': '^HSI',
+    'TA-35': 'TA35.TA'
 }
 
 COMMODITIES_CRYPTO = {
@@ -79,8 +79,8 @@ COMMODITIES_CRYPTO = {
 }
 
 MACRO_INDICATORS = {
-    'VIX (Fear Index)': '^VIX',
-    'USD/ILS (Dollar/Shekel)': 'USDILS=X'
+    'VIX (מדד הפחד)': '^VIX',
+    'דולר / שקל': 'USDILS=X'
 }
 
 def calculate_technical_indicators(df):
@@ -129,6 +129,10 @@ def fetch_all_data():
             prev_close = df['Close'].iloc[-2]
             pct_change = ((last_close - prev_close) / prev_close) * 100
             
+            # חישוב תשואה באחוזים מנורמלת ל-60 הימים האחרונים (עבור הטרנד הוויזואלי)
+            history_60 = df['Close'].tail(60)
+            norm_history = ((history_60 / history_60.iloc[0]) - 1) * 100
+            
             data[name] = {
                 'Price': round(last_close, 2),
                 '% Change': round(pct_change, 2),
@@ -138,7 +142,7 @@ def fetch_all_data():
                 'SMA_150': round(df['SMA_150'].iloc[-1], 2) if 'SMA_150' in df else None,
                 'ATR_PCT': round(df['ATR_PCT'].iloc[-1], 2) if 'ATR_PCT' in df else None,
                 'MACD_Hist': round(df['MACD_Hist'].iloc[-1], 2) if 'MACD_Hist' in df else None,
-                'History': df['Close'].tail(60)
+                'History': norm_history
             }
         except Exception as e:
             print(f"Error fetching {name}: {e}")
@@ -150,8 +154,8 @@ def compute_confluence_score(data):
     reasons = []
     
     # 1. חוזים בארה"ב (35%)
-    sp_change = data.get('S&P 500 Futures (US)', {}).get('% Change', 0)
-    nq_change = data.get('Nasdaq 100 Futures (US)', {}).get('% Change', 0)
+    sp_change = data.get('S&P 500 Futures', {}).get('% Change', 0)
+    nq_change = data.get('Nasdaq 100 Futures', {}).get('% Change', 0)
     us_avg = (sp_change + nq_change) / 2
     
     if us_avg > 0.5:
@@ -162,8 +166,8 @@ def compute_confluence_score(data):
         reasons.append("🔴 חוזים עתידיים בארה\"ב בירידות חדות.")
         
     # 2. אסיה (25%)
-    nikkei = data.get('Nikkei 225 (Asia)', {}).get('% Change', 0)
-    hangseng = data.get('Hang Seng (Asia)', {}).get('% Change', 0)
+    nikkei = data.get('Nikkei 225', {}).get('% Change', 0)
+    hangseng = data.get('Hang Seng', {}).get('% Change', 0)
     asia_avg = (nikkei + hangseng) / 2
     
     if asia_avg > 0.3:
@@ -174,7 +178,7 @@ def compute_confluence_score(data):
         reasons.append("🔴 סגירה שלילית בשווקי אסיה.")
 
     # 3. VIX - מדד הפחד (20%)
-    vix = data.get('VIX (Fear Index)', {}).get('Price', 15)
+    vix = data.get('VIX (מדד הפחד)', {}).get('Price', 15)
     if vix < 16:
         score += 10
         reasons.append("🟢 מדד VIX נמוך (סביבת מסחר רגועה).")
@@ -183,7 +187,7 @@ def compute_confluence_score(data):
         reasons.append("⚠️ מדד VIX גבוה (תנודתיות ורמת סיכון גבוהה בשוק).")
 
     # 4. מומנטום ומבוצעים (20%)
-    sp_data = data.get('S&P 500 Futures (US)', {})
+    sp_data = data.get('S&P 500 Futures', {})
     if sp_data.get('Price', 0) > sp_data.get('EMA_20', 1):
         score += 5
     if sp_data.get('Price', 0) > sp_data.get('SMA_150', 1):
@@ -245,7 +249,7 @@ if __name__ == "__main__":
                     with cols[idx]:
                         st.metric(label=name, value=f"{m['Price']}", delta=f"{m['% Change']}%")
                         st.caption(f"RSI: {m['RSI']} | ATR: {m['ATR_PCT']}%")
-                        st.line_chart(m['History'], height=80)
+                        st.line_chart(m['History'], height=90)
             
             st.subheader("💡 גורמים משפיעים על הציון")
             for r in reasons:
@@ -260,7 +264,7 @@ if __name__ == "__main__":
                     with c_cols[idx]:
                         st.metric(label=name, value=f"{m['Price']}", delta=f"{m['% Change']}%")
                         st.caption(f"RSI: {m['RSI']} | ATR: {m['ATR_PCT']}%")
-                        st.line_chart(m['History'], height=100)
+                        st.line_chart(m['History'], height=110)
 
         with tab3:
             st.subheader("תיאום מגמה ואינדיקטורים טכניים")
@@ -275,23 +279,33 @@ if __name__ == "__main__":
                     sma150 = m['SMA_150']
                     
                     if price and ema20 and ema50 and sma150:
-                        trend = "🟢 שורי חזק" if price > ema20 > ema50 > sma150 else ("🔴 דובי" if price < ema20 else "🟡 דשדוש")
+                        trend = "🟢 שורי" if price > ema20 > ema50 > sma150 else ("🔴 דובי" if price < ema20 else "🟡 דשדוש")
                     else:
                         trend = "ללא נתונים"
                         
                     tech_list.append({
                         'נכס': name,
                         'מחיר': price,
-                        'שינוי %': f"{m['% Change']}%",
-                        'RSI (14)': m['RSI'],
+                        'שינוי': f"{m['% Change']}%",
+                        'RSI': m['RSI'],
                         'ATR %': f"{m['ATR_PCT']}%",
-                        'MACD Hist': m['MACD_Hist'],
-                        'מבנה מגמה': trend
+                        'מגמה': trend
                     })
-            st.dataframe(pd.DataFrame(tech_list), use_container_width=True)
-
-        with tab3:
-            pass # Tab 3 used above for tech analysis
+            
+            df_tech = pd.DataFrame(tech_list)
+            st.dataframe(
+                df_tech, 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "נכס": st.column_config.TextColumn("נכס", width="medium"),
+                    "מחיר": st.column_config.NumberColumn("מחיר", format="%.2f"),
+                    "שינוי": st.column_config.TextColumn("שינוי יומי"),
+                    "RSI": st.column_config.NumberColumn("RSI (14)"),
+                    "ATR %": st.column_config.TextColumn("ATR %"),
+                    "מגמה": st.column_config.TextColumn("מבנה מגמה")
+                }
+            )
 
         with tab4:
             st.subheader("מדדי סיכון ומט\"ח")
