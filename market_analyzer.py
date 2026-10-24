@@ -46,27 +46,28 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# רשימת המדדים וה-ETFs העוקבות
 MARKETS = {
-    'S&P 500 Futures': 'ES=F',
-    'Nasdaq 100 Futures': 'NQ=F',
-    'Nikkei 225': '^N225',
-    'Hang Seng': '^HSI',
-    'TA-35': 'TA35.TA'
+    'S&P 500 Futures': {'ticker': 'ES=F', 'etf': 'SPY / VOO'},
+    'Nasdaq 100 Futures': {'ticker': 'NQ=F', 'etf': 'QQQ'},
+    'Nikkei 225': {'ticker': '^N225', 'etf': 'EWJ'},
+    'Hang Seng': {'ticker': '^HSI', 'etf': 'EWH / FXI'},
+    'TA-35': {'ticker': 'TA35.TA', 'etf': 'EIS / תכלית 35'}
 }
 
 COMMODITIES_CRYPTO = {
-    'זהב (Gold)': 'GC=F',
-    'נפט (Crude Oil)': 'CL=F',
-    'ביטקוין (Bitcoin)': 'BTC-USD'
+    'זהב (Gold)': {'ticker': 'GC=F', 'etf': 'GLD / IAU'},
+    'נפט (Crude Oil)': {'ticker': 'CL=F', 'etf': 'USO'},
+    'ביטקוין (Bitcoin)': {'ticker': 'BTC-USD', 'etf': 'IBIT / FBTC'}
 }
 
 MACRO_INDICATORS = {
-    'VIX (מדד הפחד)': '^VIX',
-    'דולר / שקל': 'USDILS=X'
+    'VIX (מדד הפחד)': {'ticker': '^VIX', 'etf': 'VXX / UVXY'},
+    'דולר / שקל': {'ticker': 'USDILS=X', 'etf': 'USD/ILS'}
 }
 
-def render_zoomed_chart(series, height=110):
-    """ייצור גרף Plotly עם זום אוטומטי לציר ה-Y לפי טווח המחירים האמיתי"""
+def render_zoomed_chart(series, height=120):
+    """ייצור גרף Plotly עם זום אוטומטי ואפשרות הגדלה למסך מלא"""
     if series.empty:
         return None
     
@@ -83,7 +84,7 @@ def render_zoomed_chart(series, height=110):
     ))
     
     fig.update_layout(
-        margin=dict(l=0, r=0, t=5, b=5),
+        margin=dict(l=0, r=0, t=10, b=10),
         height=height,
         xaxis=dict(visible=False),
         yaxis=dict(
@@ -131,9 +132,11 @@ def calculate_technical_indicators(df):
 @st.cache_data(ttl=900)
 def fetch_all_data():
     data = {}
-    all_tickers = {**MARKETS, **COMMODITIES_CRYPTO, **MACRO_INDICATORS}
+    all_assets = {**MARKETS, **COMMODITIES_CRYPTO, **MACRO_INDICATORS}
     
-    for name, ticker in all_tickers.items():
+    for name, item in all_assets.items():
+        ticker = item['ticker']
+        etf = item['etf']
         try:
             stock = yf.Ticker(ticker)
             df = stock.history(period="1y")
@@ -148,6 +151,7 @@ def fetch_all_data():
             data[name] = {
                 'Price': round(last_close, 2),
                 '% Change': round(pct_change, 2),
+                'ETF': etf,
                 'RSI': round(df['RSI_14'].iloc[-1], 1) if 'RSI_14' in df else None,
                 'EMA_20': round(df['EMA_20'].iloc[-1], 2) if 'EMA_20' in df else None,
                 'EMA_50': round(df['EMA_50'].iloc[-1], 2) if 'EMA_50' in df else None,
@@ -247,15 +251,16 @@ if __name__ == "__main__":
         with tab1:
             st.subheader("מצב המדדים הבינלאומיים")
             cols = st.columns(len(MARKETS))
-            for idx, (name, ticker_data) in enumerate(MARKETS.items()):
+            for idx, (name, _) in enumerate(MARKETS.items()):
                 if name in data:
                     m = data[name]
                     with cols[idx]:
                         st.metric(label=name, value=f"{m['Price']}", delta=f"{m['% Change']}%")
+                        st.caption(f"🎯 ETF: **{m['ETF']}**")
                         st.caption(f"RSI: {m['RSI']} | ATR: {m['ATR_PCT']}%")
-                        fig = render_zoomed_chart(m['History'], height=100)
+                        fig = render_zoomed_chart(m['History'], height=110)
                         if fig:
-                            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True})
             
             st.subheader("💡 גורמים משפיעים על הציון")
             for r in reasons:
@@ -264,21 +269,22 @@ if __name__ == "__main__":
         with tab2:
             st.subheader("נכסי מקלט, סחורות וקריפטו")
             c_cols = st.columns(len(COMMODITIES_CRYPTO))
-            for idx, (name, ticker_data) in enumerate(COMMODITIES_CRYPTO.items()):
+            for idx, (name, _) in enumerate(COMMODITIES_CRYPTO.items()):
                 if name in data:
                     m = data[name]
                     with c_cols[idx]:
                         st.metric(label=name, value=f"{m['Price']}", delta=f"{m['% Change']}%")
+                        st.caption(f"🎯 ETF: **{m['ETF']}**")
                         st.caption(f"RSI: {m['RSI']} | ATR: {m['ATR_PCT']}%")
                         fig = render_zoomed_chart(m['History'], height=120)
                         if fig:
-                            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True})
 
         with tab3:
             st.subheader("תיאום מגמה ואינדיקטורים טכניים")
             tech_list = []
             all_assets = {**MARKETS, **COMMODITIES_CRYPTO}
-            for name, ticker in all_assets.items():
+            for name in all_assets.keys():
                 if name in data:
                     m = data[name]
                     price = m['Price']
@@ -293,6 +299,7 @@ if __name__ == "__main__":
                         
                     tech_list.append({
                         'Asset': name,
+                        'ETF': m['ETF'],
                         'Price': price,
                         'Change %': f"{m['% Change']}%",
                         'RSI (14)': m['RSI'],
@@ -308,6 +315,7 @@ if __name__ == "__main__":
                 hide_index=True,
                 column_config={
                     "Asset": st.column_config.TextColumn("נכס", width="medium"),
+                    "ETF": st.column_config.TextColumn("תעודת סל (ETF)", width="small"),
                     "Price": st.column_config.NumberColumn("מחיר ($)", format="%.2f"),
                     "Change %": st.column_config.TextColumn("שינוי יומי"),
                     "RSI (14)": st.column_config.NumberColumn("RSI (14)", format="%.1f"),
@@ -319,11 +327,12 @@ if __name__ == "__main__":
         with tab4:
             st.subheader("מדדי סיכון ומט\"ח")
             m_cols = st.columns(2)
-            for idx, (name, ticker_data) in enumerate(MACRO_INDICATORS.items()):
+            for idx, (name, _) in enumerate(MACRO_INDICATORS.items()):
                 if name in data:
                     m = data[name]
                     with m_cols[idx]:
                         st.metric(label=name, value=f"{m['Price']}", delta=f"{m['% Change']}%")
+                        st.caption(f"🎯 ETF / Ticker: **{m['ETF']}**")
                         fig = render_zoomed_chart(m['History'], height=130)
                         if fig:
-                            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+                            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True})
